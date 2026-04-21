@@ -833,6 +833,99 @@ canvas.spark {
   transition: width 0.4s ease;
 }
 
+.boot-note {
+  margin-top: 16px;
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--text2);
+  letter-spacing: 0.03em;
+  opacity: 0.7;
+}
+
+/* ── WARMUP BANNER ── */
+.warmup-banner {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  background: color-mix(in srgb, var(--amber) 8%, var(--bg2));
+  border-bottom: 1px solid color-mix(in srgb, var(--amber) 25%, transparent);
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--amber);
+  letter-spacing: 0.03em;
+  transition: opacity 0.4s ease, transform 0.4s ease;
+  transform: translateY(-100%);
+}
+.warmup-banner.visible {
+  transform: translateY(0);
+}
+.warmup-banner.hidden {
+  opacity: 0;
+  transform: translateY(-100%);
+  pointer-events: none;
+}
+.warmup-pulse {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--amber);
+  animation: warmPulse 1.5s ease infinite;
+  flex-shrink: 0;
+}
+@keyframes warmPulse {
+  0%,100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.3; transform: scale(0.7); }
+}
+.warmup-text { flex: 1; }
+.warmup-timer { color: var(--text2); font-size: 9px; }
+.warmup-dismiss {
+  background: none; border: none; color: var(--text2);
+  cursor: pointer; font-size: 14px; padding: 0 2px;
+  line-height: 1;
+}
+.warmup-dismiss:hover { color: var(--text0); }
+
+/* ── SMART EMPTY STATES ── */
+.empty-state-box {
+  text-align: center;
+  padding: 32px 20px;
+}
+.empty-state-box .empty-icon {
+  font-size: 20px;
+  margin-bottom: 10px;
+  opacity: 0.5;
+}
+.empty-state-box .empty-title {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text1);
+  letter-spacing: 0.06em;
+  margin-bottom: 6px;
+}
+.empty-state-box .empty-desc {
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--text2);
+  letter-spacing: 0.03em;
+  line-height: 1.6;
+  max-width: 320px;
+  margin: 0 auto;
+}
+.empty-state-box .empty-dots {
+  display: inline;
+}
+.empty-state-box .empty-dots::after {
+  content: '...';
+  animation: dotFade 1.5s ease infinite;
+}
+@keyframes dotFade {
+  0%,100% { opacity: 1; } 50% { opacity: 0.2; }
+}
+
 /* ── THEME TOGGLE ── */
 .theme-toggle {
   width: 36px; height: 20px;
@@ -882,7 +975,16 @@ canvas.spark {
       <div class="boot-step" id="bs-ohlc"><span class="boot-icon"></span>Syncing OHLC candle cache</div>
     </div>
     <div class="boot-progress"><div class="boot-progress-fill" id="boot-progress"></div></div>
+    <div class="boot-note">data streams in over 1-2 minutes — tables populate as sources respond</div>
   </div>
+</div>
+
+<!-- WARMUP BANNER (visible after boot until data fully loads) -->
+<div class="warmup-banner" id="warmup-banner">
+  <div class="warmup-pulse"></div>
+  <span class="warmup-text">live data streaming in — tables populate as each source responds</span>
+  <span class="warmup-timer" id="warmup-timer"></span>
+  <button class="warmup-dismiss" onclick="document.getElementById('warmup-banner').classList.add('hidden')" aria-label="Dismiss">×</button>
 </div>
 
 <div class="shell">
@@ -1352,6 +1454,9 @@ const STATE = {
   htf: '24h',
   hsize: 'mcap',
   db: null,
+  bootedAt: 0,
+  marketLoaded: false,
+  launchLoaded: false,
   syncing: false,
   lastSync: null,
 };
@@ -1667,6 +1772,7 @@ async function fetchMarketData() {
     if (sol) setTickerPct('t-sol', sol.price, sol.p24h);
     if (bnb) setTickerPct('t-bnb', bnb.price, bnb.p24h);
 
+    if (STATE.coins.length) STATE.marketLoaded = true;
     STATE.lastSync = new Date();
     document.getElementById('ss-sync').textContent = STATE.lastSync.toLocaleTimeString();
     document.getElementById('ss-count').textContent = STATE.coins.length;
@@ -1743,6 +1849,7 @@ async function fetchLaunchData() {
   });
 
   const total = Object.values(STATE.launchData).reduce((s,a) => s + a.length, 0);
+  if (total) STATE.launchLoaded = true;
   const totalMcap = Object.values(STATE.launchData).reduce((s,a) => s + a.reduce((ss,c) => ss + (c.market_cap||0), 0), 0);
   const allEl = document.getElementById('pp-all');
   const allMel = document.getElementById('pm-all');
@@ -1912,7 +2019,20 @@ function sortFiltered() {
 function renderScreener() {
   const tbody = document.getElementById('screener-body');
   if (!STATE.filtered.length) {
-    tbody.innerHTML = '<tr class="empty-row"><td colspan="13">NO COINS MATCH FILTERS</td></tr>';
+    if (!STATE.marketLoaded) {
+      tbody.innerHTML = `<tr class="empty-row"><td colspan="13">
+        <div class="empty-state-box">
+          <div class="empty-icon">◌</div>
+          <div class="empty-title">CONNECTING TO MARKET FEEDS<span class="empty-dots"></span></div>
+          <div class="empty-desc">Fetching data from CoinGecko and Binance. This takes 1-2 minutes on first load — the platform is working.</div>
+        </div></td></tr>`;
+    } else {
+      tbody.innerHTML = `<tr class="empty-row"><td colspan="13">
+        <div class="empty-state-box">
+          <div class="empty-title">NO COINS MATCH CURRENT FILTERS</div>
+          <div class="empty-desc">Try adjusting market cap range, exchange, or search query.</div>
+        </div></td></tr>`;
+    }
     return;
   }
 
@@ -1997,7 +2117,20 @@ function renderLaunchTable() {
 
   const tbody = document.getElementById('launch-body');
   if (!coins.length) {
-    tbody.innerHTML = '<tr class="empty-row"><td colspan="15">NO DATA — COINGECKO RATE LIMIT. RETRY IN 60s.</td></tr>';
+    if (!STATE.launchLoaded) {
+      tbody.innerHTML = `<tr class="empty-row"><td colspan="15">
+        <div class="empty-state-box">
+          <div class="empty-icon">◌</div>
+          <div class="empty-title">SCANNING LAUNCH PIPELINE<span class="empty-dots"></span></div>
+          <div class="empty-desc">Gathering Alpha, Launchpad, Launchpool &amp; Megadrop data. First load takes 1-2 minutes — auto-refreshes every 120s.</div>
+        </div></td></tr>`;
+    } else {
+      tbody.innerHTML = `<tr class="empty-row"><td colspan="15">
+        <div class="empty-state-box">
+          <div class="empty-title">NO TOKENS IN THIS STAGE</div>
+          <div class="empty-desc">Try selecting a different pipeline stage or "All Stages".</div>
+        </div></td></tr>`;
+    }
     return;
   }
 
@@ -2298,6 +2431,29 @@ async function realTimeRefresh() {
   }
 }
 
+function showWarmupBanner() {
+  const banner = document.getElementById('warmup-banner');
+  const timer = document.getElementById('warmup-timer');
+  if (!banner) return;
+  setTimeout(() => banner.classList.add('visible'), 300);
+  const iv = setInterval(() => {
+    if (STATE.marketLoaded && STATE.launchLoaded) {
+      banner.classList.add('hidden');
+      clearInterval(iv);
+      return;
+    }
+    const elapsed = Math.round((Date.now() - STATE.bootedAt) / 1000);
+    if (elapsed > 180) {
+      banner.classList.add('hidden');
+      clearInterval(iv);
+      return;
+    }
+    const m = Math.floor(elapsed / 60);
+    const s = String(elapsed % 60).padStart(2, '0');
+    if (timer) timer.textContent = `${m}:${s}`;
+  }, 1000);
+}
+
 // ── BOOT ──
 async function boot() {
   bootStep('bs-db', 'active');
@@ -2336,6 +2492,9 @@ async function boot() {
   bootStep('bs-ohlc', 'active');
   await syncOHLCForVisible();
   bootStep('bs-ohlc', 'done');
+
+  STATE.bootedAt = Date.now();
+  showWarmupBanner();
 
   // Auto-refresh layers:
   // Layer 1: Real-time price engine — every 30s, Binance 1m klines
