@@ -926,6 +926,72 @@ canvas.spark {
   0%,100% { opacity: 1; } 50% { opacity: 0.2; }
 }
 
+/* ── LAUNCH FILTER BAR ── */
+.launch-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.binance-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+.binance-toggle input { display: none; }
+.toggle-track {
+  width: 28px; height: 14px;
+  border-radius: 7px;
+  background: var(--bg4);
+  border: 1px solid var(--border-bright);
+  position: relative;
+  transition: background 0.2s;
+  flex-shrink: 0;
+}
+.toggle-track::after {
+  content: '';
+  position: absolute;
+  top: 1px; left: 1px;
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: var(--text2);
+  transition: transform 0.2s, background 0.2s;
+}
+.binance-toggle input:checked + .toggle-track {
+  background: var(--acid-dim);
+  border-color: var(--acid);
+}
+.binance-toggle input:checked + .toggle-track::after {
+  transform: translateX(14px);
+  background: var(--acid);
+}
+.toggle-label {
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--text2);
+  letter-spacing: 0.06em;
+}
+.binance-count {
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--text2);
+  letter-spacing: 0.03em;
+  margin-left: auto;
+}
+.tag-nolisting {
+  background: color-mix(in srgb, var(--text2) 15%, transparent);
+  color: var(--text2);
+  font-size: 8px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-family: var(--mono);
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
 /* ── THEME TOGGLE ── */
 .theme-toggle {
   width: 36px; height: 20px;
@@ -1232,6 +1298,15 @@ canvas.spark {
           <span id="launch-insight-text">Graduation pipeline: Alpha → Launchpool → Launchpad is Binance's typical CEX path. Watch Alpha tokens with vol spike + positive OI trend. Average graduation window: 30–90 days. Megadrop tokens have largest airdrop pools — BNB locked = demand signal.</span>
         </div>
 
+        <div class="launch-filter-bar">
+          <label class="binance-toggle" id="binance-toggle">
+            <input type="checkbox" onchange="toggleBinanceOnly(this.checked)">
+            <span class="toggle-track"></span>
+            <span class="toggle-label">BINANCE LISTED ONLY</span>
+          </label>
+          <span class="binance-count" id="binance-count"></span>
+        </div>
+
         <div class="tbl-container">
           <table class="screener" id="launch-tbl">
             <thead>
@@ -1457,6 +1532,7 @@ const STATE = {
   bootedAt: 0,
   marketLoaded: false,
   launchLoaded: false,
+  launchBinanceOnly: false,
   syncing: false,
   lastSync: null,
 };
@@ -1466,6 +1542,7 @@ const STATE = {
 // Single source of truth for short-timeframe price changes across all panels.
 const PriceEngine = {
   cache: {},        // symbol → { p5m, p15m, p1h, p4h, price, ts }
+  noBinance: new Set(),  // symbols confirmed not on Binance
   queue: [],
   running: false,
   BATCH_DELAY: 80,  // ms between requests (Binance allows 1200 req/min)
@@ -1505,12 +1582,16 @@ const PriceEngine = {
   },
 
   async fetchOne(sym) {
+    if (this.noBinance.has(sym)) return null;
     const pair = sym.replace('/','') + 'USDT';
     try {
       const r = await fetch(
         `https://api.binance.com/api/v3/klines?symbol=${pair}&interval=1m&limit=241`
       );
-      if (!r.ok) return null;
+      if (!r.ok) {
+        if (r.status === 400) this.noBinance.add(sym);
+        return null;
+      }
       const raw = await r.json();
       if (!Array.isArray(raw) || raw.length < 2) return null;
       const candles = raw.map(k => ({ t: k[0], o: +k[1], h: +k[2], l: +k[3], c: +k[4], v: +k[5] }));
@@ -1551,6 +1632,9 @@ const PriceEngine = {
         c._p5m = d.p5m;
         c._p15m = d.p15m;
         c._p1h = d.p1h;
+        c._onBinance = true;
+      } else if (this.noBinance.has(sym)) {
+        c._onBinance = false;
       }
     });
   },
@@ -1815,6 +1899,7 @@ async function fetchLaunchData() {
         const sym = (c.symbol || '').toUpperCase();
         const cached = PriceEngine.get(sym);
         const p1h = c.price_change_percentage_1h_in_currency || 0;
+        const onBinance = cached ? true : (PriceEngine.noBinance.has(sym) ? false : null);
         return {
           ...c,
           _stage: key,
@@ -1822,6 +1907,7 @@ async function fetchLaunchData() {
           _p5m:  cached ? cached.p5m  : null,
           _p15m: cached ? cached.p15m : null,
           _p1h:  cached ? cached.p1h  : p1h,
+          _onBinance: onBinance,
           _fromAth: c.ath ? ((c.current_price - c.ath) / c.ath * 100) : null,
           _roi: c.atl ? ((c.current_price - c.atl) / (c.atl || 1) * 100) : null,
           _daysSince: c.atl_date ? Math.floor((Date.now() - new Date(c.atl_date).getTime()) / 86400000) : null,
@@ -2094,6 +2180,15 @@ function renderLaunchTable() {
     coins = STATE.launchData[stage] || [];
   }
 
+  // Binance listing stats
+  const notListed = coins.filter(c => c._onBinance === false).length;
+  const countEl = document.getElementById('binance-count');
+  if (countEl) countEl.textContent = notListed ? `${notListed} not on Binance` : '';
+
+  if (STATE.launchBinanceOnly) {
+    coins = coins.filter(c => c._onBinance !== false);
+  }
+
   // sort
   coins.sort((a, b) => {
     const dir = STATE.lSortDir;
@@ -2154,7 +2249,7 @@ function renderLaunchTable() {
           </div>
         </div>
       </td>
-      <td><span class="tag ${stageMap[c._stage] || 'tag-chain'}">${escHtml(stageLabel[c._stage] || c._stage)}</span></td>
+      <td><span class="tag ${stageMap[c._stage] || 'tag-chain'}">${escHtml(stageLabel[c._stage] || c._stage)}</span>${c._onBinance === false ? ' <span class="tag-nolisting">UNLISTED</span>' : ''}</td>
       <td style="font-size:11px;color:var(--text1)">${F.price(c.current_price)}</td>
       <td style="font-size:10px;color:var(--text1)">${F.mcap(c.market_cap)}</td>
       <td style="font-size:10px;color:var(--text1)">${F.vol(c.total_volume)}</td>
@@ -2304,6 +2399,11 @@ function setPipeStage(el) {
   const matching = document.querySelector(`[data-launch="${el.dataset.stage}"]`);
   if (matching) matching.classList.add('on');
   applyFilters();
+  renderLaunchTable();
+}
+
+function toggleBinanceOnly(checked) {
+  STATE.launchBinanceOnly = checked;
   renderLaunchTable();
 }
 
