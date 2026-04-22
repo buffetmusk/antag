@@ -3,10 +3,10 @@
 import { STATE, CFG, csvCell } from './state.js';
 import {
   initDB, fetchGlobal, fetchFearGreed, fetchMarketData, fetchLaunchData,
-  syncOHLCForVisible, PriceEngine,
+  fetchExchangeListings, syncOHLCForVisible, PriceEngine,
   getAllCacheStats, updateCacheStatusBar, updateOHLCCachePanel,
 } from './api.js';
-import { applyFilters, renderHeatmap, renderLaunchTable } from './render.js';
+import { applyFilters, renderHeatmap, renderLaunchTable, renderScreener } from './render.js';
 
 // ── THEME ──
 function toggleTheme() {
@@ -22,7 +22,7 @@ function toggleTheme() {
 })();
 
 // ── BOOT OVERLAY ──
-const BOOT_STEPS = ['bs-db','bs-market','bs-global','bs-sentiment','bs-launch','bs-rt','bs-ohlc'];
+const BOOT_STEPS = ['bs-db','bs-exch','bs-market','bs-global','bs-sentiment','bs-launch','bs-rt','bs-ohlc'];
 let bootDone = 0;
 
 function bootStep(id, status) {
@@ -218,6 +218,31 @@ function setSyncStatus(status) {
   label.textContent = status.toUpperCase();
 }
 
+// ── PAGINATION ──
+function prevPage() {
+  if (STATE.page > 1) { STATE.page--; renderScreener(); }
+}
+function nextPage() {
+  const totalPages = Math.ceil(STATE.filtered.length / STATE.pageSize) || 1;
+  if (STATE.page < totalPages) { STATE.page++; renderScreener(); }
+}
+
+// ── KEYBOARD SEARCH ──
+function initKeyboardSearch() {
+  document.addEventListener('keydown', e => {
+    const tag = (e.target.tagName || '').toLowerCase();
+    if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const search = document.getElementById('s-search');
+    if (!search) return;
+    if (e.key === '/') { e.preventDefault(); search.focus(); return; }
+    if (e.key === 'Escape') { search.value = ''; search.dispatchEvent(new Event('input')); search.blur(); return; }
+    if (e.key.length === 1 && /[a-zA-Z0-9]/.test(e.key)) {
+      search.focus();
+    }
+  });
+}
+
 // ── EXPOSE TO HTML onclick ATTRIBUTES ──
 window.switchTab = switchTab;
 window.colSort = colSort;
@@ -235,6 +260,8 @@ window.closeStorageModal = closeStorageModal;
 window.exportCSV = exportCSV;
 window.toggleTheme = toggleTheme;
 window.applyFilters = applyFilters;
+window.prevPage = prevPage;
+window.nextPage = nextPage;
 
 // ── BOOT ──
 async function boot() {
@@ -243,13 +270,15 @@ async function boot() {
   await updateCacheStatusBar();
   bootStep('bs-db', 'done');
 
+  bootStep('bs-exch', 'active');
+  await fetchExchangeListings();
+  bootStep('bs-exch', 'done');
+
   bootStep('bs-market', 'active');
   await fetchMarketData();
   applyFilters();
   renderHeatmap();
   bootStep('bs-market', 'done');
-
-  await new Promise(r => setTimeout(r, 1500));
 
   bootStep('bs-global', 'active');
   await fetchGlobal();
@@ -258,8 +287,6 @@ async function boot() {
   bootStep('bs-sentiment', 'active');
   await fetchFearGreed();
   bootStep('bs-sentiment', 'done');
-
-  await new Promise(r => setTimeout(r, 1500));
 
   bootStep('bs-launch', 'active');
   await fetchLaunchData();
@@ -282,6 +309,7 @@ async function boot() {
 
   STATE.bootedAt = Date.now();
   showWarmupBanner();
+  initKeyboardSearch();
 
   // Auto-refresh layers:
   // Layer 1: Real-time price engine — every 30s, Binance 1m klines

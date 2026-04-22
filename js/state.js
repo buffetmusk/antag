@@ -45,6 +45,7 @@ export async function fetchWithRetry(url, retries = 3, delayMs = 2000) {
 
 // ── CONFIG ──
 export const CFG = {
+  WORKER_BASE: 'https://antag-api.srikanthbluemoon.workers.dev',
   OHLC_DAYS: 14,           // Rolling window
   RT_INTERVAL: 30000,      // 30s real-time price engine
   SYNC_INTERVAL: 60000,    // 1 min CoinGecko refresh
@@ -119,6 +120,9 @@ export const STATE = {
   marketLoaded: false,
   launchLoaded: false,
   launchBinanceOnly: false,
+  page: 1,
+  pageSize: 50,
+  exchangeListings: {},
   syncing: false,
   lastSync: null,
 };

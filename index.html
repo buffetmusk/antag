@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src https://assets.coingecko.com https://coin-images.coingecko.com data:; connect-src https://api.coingecko.com https://api.binance.com https://api.alternative.me;">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src https://assets.coingecko.com https://coin-images.coingecko.com data:; connect-src https://antag-api.srikanthbluemoon.workers.dev https://api.binance.com https://fapi.binance.com;">
 <title>antag</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,300;0,400;0,500;0,600;1,300&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
@@ -19,6 +19,7 @@
     <div class="boot-sub">initializing</div>
     <div class="boot-steps">
       <div class="boot-step" id="bs-db"><span class="boot-icon"></span>Opening local database</div>
+      <div class="boot-step" id="bs-exch"><span class="boot-icon"></span>Fetching exchange listings</div>
       <div class="boot-step" id="bs-market"><span class="boot-icon"></span>Fetching live market data</div>
       <div class="boot-step" id="bs-global"><span class="boot-icon"></span>Loading global indices</div>
       <div class="boot-step" id="bs-sentiment"><span class="boot-icon"></span>Reading market sentiment</div>
@@ -239,6 +240,7 @@
         <span class="storage-val accent" id="showing-count">&mdash;</span>
         <span class="storage-key">/ TOTAL</span>
         <span class="storage-val" id="total-count">&mdash;</span>
+        <span id="pagination-controls"></span>
         <span class="storage-key" style="margin-left:12px">OHLC CACHE</span>
         <span class="storage-val" id="cache-size">&mdash;</span>
         <span class="storage-key">&middot; WINDOW</span>

@@ -21,7 +21,7 @@ export function setTickerPct(id, price, pct) {
 export function pctCell(v) { return F.pct(v); }
 
 export function exchangeBadges(sym) {
-  const exchs = CFG.EXCHANGES[sym] || ['Binance'];
+  const exchs = STATE.exchangeListings[sym] || [];
   const map = { Binance:'eb-bnb', Bybit:'eb-byb', OKX:'eb-okx', 'Gate.io':'eb-gte' };
   const short = { Binance:'BNB', Bybit:'BYB', OKX:'OKX', 'Gate.io':'GATE' };
   return `<div class="exch-row">${exchs.map(e =>
@@ -111,7 +111,7 @@ export function applyFilters() {
     if (c.mcap > maxMcap) return false;
     if (chain && c.chain !== chain) return false;
     if (sector && c.sector !== sector) return false;
-    if (STATE.selectedExch !== 'all' && !(CFG.EXCHANGES[c.sym] || []).includes(STATE.selectedExch)) return false;
+    if (STATE.selectedExch !== 'all' && !(STATE.exchangeListings[c.sym] || []).includes(STATE.selectedExch)) return false;
     if (STATE.selectedLaunch !== 'all' && c.launchStage !== STATE.selectedLaunch) return false;
     if (fund === 'positive' && c.funding <= 0) return false;
     if (fund === 'negative' && c.funding >= 0) return false;
@@ -120,6 +120,7 @@ export function applyFilters() {
     return true;
   });
 
+  STATE.page = 1;
   sortFiltered();
   renderScreener();
   document.getElementById('showing-count').textContent = STATE.filtered.length;
@@ -167,7 +168,12 @@ export function renderScreener() {
     return;
   }
 
-  tbody.innerHTML = STATE.filtered.map((c, i) => {
+  const totalPages = Math.ceil(STATE.filtered.length / STATE.pageSize) || 1;
+  if (STATE.page > totalPages) STATE.page = totalPages;
+  const start = (STATE.page - 1) * STATE.pageSize;
+  const pageCoins = STATE.filtered.slice(start, start + STATE.pageSize);
+
+  tbody.innerHTML = pageCoins.map((c, i) => {
     const volW = Math.min(100, (c.volRatio / 4) * 100);
     const fCls = c.funding > 0.05 ? 'fund-pos' : c.funding < -0.05 ? 'fund-neg' : '';
     const hiCls = Math.abs(c.funding) > 0.1 ? 'fund-hi' : fCls;
@@ -206,11 +212,26 @@ export function renderScreener() {
   }).join('');
 
   requestAnimationFrame(() => {
-    STATE.filtered.forEach(c => {
+    pageCoins.forEach(c => {
       const cvs = document.getElementById(`sp_${c.sym}`);
       if (cvs) drawSpark(cvs, c.spark);
     });
   });
+
+  renderPagination();
+}
+
+export function renderPagination() {
+  const total = STATE.filtered.length;
+  const totalPages = Math.ceil(total / STATE.pageSize) || 1;
+  const el = document.getElementById('pagination-controls');
+  if (!el) return;
+  if (totalPages <= 1) { el.innerHTML = ''; return; }
+  el.innerHTML = `
+    <button class="btn-page" onclick="prevPage()" ${STATE.page <= 1 ? 'disabled' : ''}>&lsaquo;</button>
+    <span class="page-info">Page ${STATE.page} of ${totalPages}</span>
+    <button class="btn-page" onclick="nextPage()" ${STATE.page >= totalPages ? 'disabled' : ''}>&rsaquo;</button>
+  `;
 }
 
 export function renderLaunchTable() {

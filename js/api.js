@@ -220,40 +220,50 @@ export async function getAllCacheStats() {
 
 export async function fetchGlobal() {
   try {
-    const r = await fetchWithRetry('https://api.coingecko.com/api/v3/global');
+    const r = await fetch(CFG.WORKER_BASE + '/api/global');
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const d = await r.json();
-    const g = d.data;
-    setSyncStatus('live');
-    setTicker('t-dom', (g.market_cap_percentage?.btc || 0).toFixed(1) + '%');
-    setTicker('t-mcap', F.mcap(g.total_market_cap?.usd));
+    if (d.global) {
+      setSyncStatus('live');
+      setTicker('t-dom', (d.global.market_cap_percentage?.btc || 0).toFixed(1) + '%');
+      setTicker('t-mcap', F.mcap(d.global.total_market_cap?.usd));
+    }
+    if (d.fearGreed) {
+      const el = document.getElementById('t-fg');
+      if (el) {
+        el.textContent = d.fearGreed.value + ' / ' + d.fearGreed.value_classification;
+        const v = parseInt(d.fearGreed.value);
+        el.className = 'ticker-price ' + (v >= 60 ? 'ticker-up' : v <= 40 ? 'ticker-dn' : '');
+      }
+    }
   } catch(e) {}
 }
 
 export async function fetchFearGreed() {
+  // Merged into fetchGlobal() via worker — no-op
+}
+
+export async function fetchExchangeListings() {
   try {
-    const r = await fetch('https://api.alternative.me/fng/?limit=1');
-    const d = await r.json();
-    const val = d.data[0];
-    const el = document.getElementById('t-fg');
-    el.textContent = val.value + ' / ' + val.value_classification;
-    const v = parseInt(val.value);
-    el.className = 'ticker-price ' + (v >= 60 ? 'ticker-up' : v <= 40 ? 'ticker-dn' : '');
-  } catch(e) {}
+    const r = await fetch(CFG.WORKER_BASE + '/api/exchanges');
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    STATE.exchangeListings = await r.json();
+  } catch(e) {
+    console.warn('Exchange listings fetch failed:', e.message);
+  }
 }
 
 export async function fetchMarketData() {
   setSyncStatus('syncing');
-  const knownSyms = Object.keys(CFG.EXCHANGES);
   try {
-    const r = await fetchWithRetry(
-      `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=100&page=1&sparkline=true&price_change_percentage=1h,24h,7d,30d`
-    );
+    const r = await fetch(CFG.WORKER_BASE + '/api/market');
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const data = await r.json();
     if (!Array.isArray(data)) throw new Error('invalid response');
 
     STATE.coins = data
       .filter(c => c && typeof c.symbol === 'string' && typeof c.name === 'string' && typeof c.current_price === 'number')
-      .filter(c => c.market_cap >= CFG.MCAP_MIN && knownSyms.includes(c.symbol.toUpperCase()))
+      .filter(c => c.market_cap >= CFG.MCAP_MIN)
       .map(c => {
         const sym = c.symbol.toUpperCase();
         const spark7d = c.sparkline_in_7d?.price || [];
@@ -275,8 +285,8 @@ export async function fetchMarketData() {
           funding: existing ? existing.funding : 0,
           oiChange: existing ? existing.oiChange : 0,
           volRatio: c.total_volume && c.market_cap ? (c.total_volume / c.market_cap * 10) : 0,
-          chain: CFG.CHAIN[sym] || 'Ethereum',
-          sector: CFG.SECTOR[sym] || 'Other',
+          chain: CFG.CHAIN[sym] || '—',
+          sector: CFG.SECTOR[sym] || '—',
           image: c.image,
           ath: c.ath, atl: c.atl,
           atl_date: c.atl_date,
@@ -314,25 +324,14 @@ export async function fetchMarketData() {
 }
 
 export async function fetchLaunchData() {
-  const cats = [
-    ['alpha', 'binance-alpha-spotlight'],
-    ['launchpad', 'binance-launchpad'],
-    ['launchpool', 'binance-launchpool'],
-    ['megadrop', 'binance-megadrop'],
-  ];
+  try {
+    const r = await fetch(CFG.WORKER_BASE + '/api/launches');
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const allCats = await r.json();
 
-  const results = await Promise.allSettled(cats.map(async ([key, catId]) => {
-    const r = await fetchWithRetry(
-      `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&category=${catId}&order=market_cap_desc&per_page=100&page=1&sparkline=true&price_change_percentage=1h,24h,7d,30d`
-    );
-    const data = await r.json();
-    if (!Array.isArray(data)) throw new Error('invalid response');
-    return [key, data.filter(c => c && typeof c.symbol === 'string' && typeof c.name === 'string')];
-  }));
-
-  results.forEach(r => {
-    if (r.status === 'fulfilled') {
-      const [key, data] = r.value;
+    const cats = ['alpha', 'launchpad', 'launchpool', 'megadrop'];
+    cats.forEach(key => {
+      const data = (allCats[key] || []).filter(c => c && typeof c.symbol === 'string' && typeof c.name === 'string');
       STATE.launchData[key] = data.map(c => {
         const sym = (c.symbol || '').toUpperCase();
         const cached = PriceEngine.get(sym);
@@ -351,8 +350,7 @@ export async function fetchLaunchData() {
           _daysSince: c.atl_date ? Math.floor((Date.now() - new Date(c.atl_date).getTime()) / 86400000) : null,
         };
       });
-    }
-  });
+    });
 
   // Update pipeline counts + mcap
   const stageInfo = (key) => {
@@ -390,6 +388,9 @@ export async function fetchLaunchData() {
   STATE.coins.forEach(c => { c.launchStage = allLaunch[c.sym] || null; });
 
   // NOTE: main.js calls renderLaunchTable() after this returns
+  } catch(e) {
+    console.warn('Launch fetch failed:', e.message);
+  }
 }
 
 // ── OHLC FETCH (Binance public REST) ──

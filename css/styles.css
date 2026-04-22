@@ -1011,3 +1011,30 @@ canvas.spark {
   letter-spacing: 0.06em;
   font-family: var(--mono);
 }
+
+/* ── PAGINATION ── */
+#pagination-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 12px;
+}
+.btn-page {
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 2px 8px;
+  cursor: pointer;
+  border-radius: 3px;
+  transition: background .15s, border-color .15s;
+}
+.btn-page:hover:not(:disabled) { background: var(--acid-dim); border-color: var(--acid); }
+.btn-page:disabled { opacity: .3; cursor: default; }
+.page-info {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text2);
+  letter-spacing: .04em;
+}
