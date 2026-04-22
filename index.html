@@ -2186,7 +2186,7 @@ function renderLaunchTable() {
   if (countEl) countEl.textContent = notListed ? `${notListed} not on Binance` : '';
 
   if (STATE.launchBinanceOnly) {
-    coins = coins.filter(c => c._onBinance !== false);
+    coins = coins.filter(c => c._onBinance === true);
   }
 
   // sort
