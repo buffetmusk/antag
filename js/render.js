@@ -123,6 +123,7 @@ export function applyFilters() {
   STATE.page = 1;
   sortFiltered();
   renderScreener();
+  renderLaunchTable();
   document.getElementById('showing-count').textContent = STATE.filtered.length;
   document.getElementById('total-count').textContent = STATE.coins.length;
   document.getElementById('nb-screener').textContent = STATE.filtered.length;
@@ -254,6 +255,19 @@ export function renderLaunchTable() {
   if (STATE.launchBinanceOnly) {
     coins = coins.filter(c => c._onBinance === true);
   }
+
+  const search = document.getElementById('s-search').value.trim().toUpperCase();
+  const minMcap = parseFloat(document.getElementById('s-mcap').value) * 1e6;
+  const maxMcapRaw = document.getElementById('s-mcap-max').value;
+  const maxMcap = maxMcapRaw ? parseFloat(maxMcapRaw) * 1e6 : Infinity;
+  coins = coins.filter(c => {
+    const sym = (c.symbol || '').toUpperCase();
+    const name = (c.name || '').toUpperCase();
+    if (search && !sym.includes(search) && !name.includes(search)) return false;
+    if ((c.market_cap || 0) < minMcap) return false;
+    if ((c.market_cap || 0) > maxMcap) return false;
+    return true;
+  });
 
   // sort
   coins.sort((a, b) => {
