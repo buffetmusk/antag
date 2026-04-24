@@ -7,6 +7,8 @@ import {
   getAllCacheStats, updateCacheStatusBar, updateOHLCCachePanel,
 } from './api.js';
 import { applyFilters, renderHeatmap, renderLaunchTable, renderScreener } from './render.js';
+import { initAlerts, runScreenerCheck, runLaunchCheck } from './alerts.js';
+import { showAlertsModal, closeAlertsModal, showAlertToast } from './alerts-ui.js';
 
 // ── THEME ──
 function toggleTheme() {
@@ -53,6 +55,7 @@ async function realTimeRefresh() {
     PriceEngine.applyToLaunch();
     applyFilters();
     renderLaunchTable();
+    runScreenerCheck();
   } catch(e) {
     console.warn('RT refresh:', e.message);
   }
@@ -262,6 +265,8 @@ window.toggleTheme = toggleTheme;
 window.applyFilters = applyFilters;
 window.prevPage = prevPage;
 window.nextPage = nextPage;
+window.showAlertsModal = showAlertsModal;
+window.closeAlertsModal = closeAlertsModal;
 
 // ── BOOT ──
 async function boot() {
@@ -311,6 +316,8 @@ async function boot() {
   STATE.bootedAt = Date.now();
   showWarmupBanner();
   initKeyboardSearch();
+  initAlerts();
+  window._onAlertFired = showAlertToast;
 
   // Auto-refresh layers:
   // Layer 1: Real-time price engine — every 30s, Binance 1m klines
@@ -318,7 +325,7 @@ async function boot() {
   // Layer 2: CoinGecko market data — every 60s (mcap, vol, sparklines, 24h/7d/30d)
   setInterval(async () => { await fetchMarketData(); applyFilters(); renderHeatmap(); }, CFG.SYNC_INTERVAL);
   // Layer 3: Launch intel — every 120s
-  setInterval(async () => { await fetchLaunchData(); renderLaunchTable(); }, CFG.SYNC_INTERVAL * 2);
+  setInterval(async () => { await fetchLaunchData(); renderLaunchTable(); runLaunchCheck(); }, CFG.SYNC_INTERVAL * 2);
   // Layer 4: OHLC cache — every 5 min
   setInterval(async () => { await syncOHLCForVisible(); await updateOHLCCachePanel(); await updateCacheStatusBar(); }, CFG.OHLC_SYNC_INTERVAL);
   // Layer 5: Global indices — every 60s

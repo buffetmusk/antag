@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src https://assets.coingecko.com https://coin-images.coingecko.com data:; connect-src https://antag-api.srikanthbluemoon.workers.dev https://api.binance.com https://fapi.binance.com;">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src https://assets.coingecko.com https://coin-images.coingecko.com data:; connect-src https://antag-api.srikanthbluemoon.workers.dev https://api.binance.com https://fapi.binance.com https://api.telegram.org;">
 <title>antag</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,300;0,400;0,500;0,600;1,300&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
@@ -65,6 +65,7 @@
       </div>
       <button class="btn-sm" onclick="triggerSync()">&#x21bb; SYNC</button>
       <button class="btn-sm" onclick="showStorageModal()">&#x2299; CACHE</button>
+      <button class="btn-sm" onclick="showAlertsModal()">&#x1F514; ALERTS</button>
       <div class="theme-toggle" onclick="toggleTheme()" title="Toggle light/dark theme"></div>
     </div>
   </header>
@@ -392,6 +393,17 @@
     </div>
   </div>
 </div>
+
+<!-- ALERTS MODAL -->
+<div class="modal-overlay" id="alerts-modal" onclick="if(event.target===this)closeAlertsModal()">
+  <div class="modal fade-in" style="width:560px;max-height:80vh;overflow-y:auto">
+    <div class="modal-title">&#x1F514; ALERT SETTINGS <span class="modal-close" onclick="closeAlertsModal()">&#x2715;</span></div>
+    <div id="alerts-modal-content">Loading...</div>
+  </div>
+</div>
+
+<!-- ALERT TOASTS -->
+<div id="alert-toast-container"></div>
 
 <script type="module" src="js/main.js"></script>
 </body>

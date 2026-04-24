@@ -125,6 +125,13 @@ export const STATE = {
   exchangeListings: {},
   syncing: false,
   lastSync: null,
+  alerts: {
+    config: null,
+    lastFired: {},
+    history: [],
+    knownLaunchIds: new Set(),
+    sending: false,
+  },
 };
 
 // ── FORMATTING ──
