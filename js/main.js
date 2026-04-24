@@ -2,8 +2,8 @@
 
 import { STATE, CFG, csvCell } from './state.js';
 import {
-  initDB, fetchGlobal, fetchFearGreed, fetchMarketData, fetchLaunchData,
-  fetchExchangeListings, syncOHLCForVisible, PriceEngine,
+  initDB, fetchGlobal, fetchFearGreed, fetchFundingRates, fetchMarketData,
+  fetchLaunchData, fetchExchangeListings, syncOHLCForVisible, PriceEngine,
   getAllCacheStats, updateCacheStatusBar, updateOHLCCachePanel,
 } from './api.js';
 import { applyFilters, renderHeatmap, renderLaunchTable, renderScreener } from './render.js';
@@ -285,7 +285,8 @@ async function boot() {
   bootStep('bs-global', 'done');
 
   bootStep('bs-sentiment', 'active');
-  await fetchFearGreed();
+  await fetchFundingRates();
+  applyFilters();
   bootStep('bs-sentiment', 'done');
 
   bootStep('bs-launch', 'active');
@@ -322,6 +323,8 @@ async function boot() {
   setInterval(async () => { await syncOHLCForVisible(); await updateOHLCCachePanel(); await updateCacheStatusBar(); }, CFG.OHLC_SYNC_INTERVAL);
   // Layer 5: Global indices — every 60s
   setInterval(fetchGlobal, CFG.SYNC_INTERVAL);
+  // Layer 6: Funding rates — every 60s
+  setInterval(async () => { await fetchFundingRates(); applyFilters(); }, CFG.SYNC_INTERVAL);
 }
 
 boot();

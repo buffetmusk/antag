@@ -243,6 +243,31 @@ export async function fetchFearGreed() {
   // Merged into fetchGlobal() via worker — no-op
 }
 
+export async function fetchFundingRates() {
+  try {
+    const r = await fetch(CFG.WORKER_BASE + '/api/futures/funding');
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const data = await r.json();
+    if (!Array.isArray(data)) return;
+
+    const fundingMap = {};
+    for (const item of data) {
+      const sym = (item.symbol || '').replace(/USDT$/, '');
+      if (sym && item.lastFundingRate != null) {
+        fundingMap[sym] = parseFloat(item.lastFundingRate) * 100;
+      }
+    }
+
+    STATE.coins.forEach(c => {
+      if (fundingMap[c.sym] !== undefined) {
+        c.funding = fundingMap[c.sym];
+      }
+    });
+  } catch(e) {
+    console.warn('Funding fetch failed:', e.message);
+  }
+}
+
 export async function fetchExchangeListings() {
   try {
     const r = await fetch(CFG.WORKER_BASE + '/api/exchanges');
